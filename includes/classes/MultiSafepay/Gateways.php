@@ -57,7 +57,7 @@ class MultiSafepay_Gateways
             add_action( 'woocommerce_product_set_stock',    array('qwindo' , 'msp_sync_product_stock')  ,   10, 10 );
             add_action( 'woocommerce_variation_set_stock',  array('qwindo',  'msp_sync_variation_stock'),   10, 10 );
 
-            add_action( 'woocommerce_settings_save_{$id}',  array('qwindo',  'msp_sync_store'),   10, 10 );
+            add_action( 'woocommerce_update_options',  		array('qwindo',  'msp_sync_store'),   10, 10 );
 
         }
 
