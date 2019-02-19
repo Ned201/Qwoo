@@ -73,7 +73,6 @@ class MultiSafepay_ObjectCore
 
     protected function processRequest($http_method, $endpoint, $http_body = null)
     {
-
         $body = $this->mspapi->processAPIRequest($http_method, $endpoint, $http_body);
 
         if (!($object = json_decode($body))) {
@@ -84,8 +83,6 @@ class MultiSafepay_ObjectCore
             $exception = new Exception("{$object->error_code}: {$object->error_info}.");
             throw $exception;
         }
-
         return $object;
     }
-
 }

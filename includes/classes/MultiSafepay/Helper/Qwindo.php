@@ -1,14 +1,14 @@
 <?php
 
-function feeds($params)
+function feeds()
 {
-
     $params = filter_input_array(INPUT_GET, FILTER_SANITIZE_STRING);
 
     define ('QWINDO_KEY', get_option('multisafepay_qwindo_api_key'));
     define ('HASH_ID'   , get_option('multisafepay_qwindo_hash_id'));
 
     $qwindo = new Qwindo();
+    $result = null;
 
     if (!isset ($params['test']) && $params['identifier'] != 'shipping'){
 
@@ -23,56 +23,66 @@ function feeds($params)
         $token      = hash_hmac('sha512', $message, QWINDO_KEY);
 
         if($token !== $auth[1] and round($timestamp - $auth[0]) > 10){
-            return (array('This is not a valid Feed command'));
+            $result = '{"success": false,
+                        "data": {
+                            "error_code": "QW-3000",
+                            "error": __("Signature error", "multisafepay")
+                        }}';
         }
     }
 
-    switch ( $params['identifier']){
+    if (!$result) {
+        switch ($params['identifier']) {
 
-        case 'total_products':
-            $result = $qwindo->total_products();
-            break;
-
-        case 'categories':
-            $result = $qwindo->categories($params);
-            break;
-
-        case 'stores':
-            $result = $qwindo->stores($params);
-            break;
-
-        case 'shipping':
-            $result = $qwindo->shipping($params);
-            break;
-
-        case 'stock':
-            if (isset($params['product_id'])){
-                $result = $qwindo->stock($params['product_id']);
+            case 'total_products':
+                $result = $qwindo->total_products();
                 break;
-            }
 
-            if (isset($params['variant_id'])) {
-                $result = $qwindo->stock($params['variant_id']);
-            }else{
-                $result = array('Invalid params supplied');
-            }
-            break;
-
-        case 'products':
-            if (isset($params['product_id'])){
-                $result = $qwindo->productById($params['product_id']);
+            case 'categories':
+                $result = $qwindo->categories();
                 break;
-            }
 
-            if (isset($params['offset']) && isset($params['limit'])){
-                $result = $qwindo->productByRange(  $params['limit'], $params['offset']);
-            }else{
-                $result = array('Invalid params supplied');
-            }
-            break;
+            case 'stores':
+                $result = $qwindo->stores();
+                break;
 
-        default:
-            $result = array('No results available');
+            case 'shipping':
+                $result = $qwindo->shipping($params);
+                break;
+
+            case 'stock':
+                if (isset($params['product_id'])) {
+                    $result = $qwindo->stock($params['product_id']);
+                    break;
+                }
+
+                if (isset($params['variant_id'])) {
+                    $result = $qwindo->stock($params['variant_id']);
+                } else {
+                    $result = array('Invalid params supplied');
+                }
+                break;
+
+            case 'products':
+                if (isset($params['product_id'])) {
+                    $result = $qwindo->productById($params['product_id']);
+                    break;
+                }
+
+                if (isset($params['offset']) && isset($params['limit'])) {
+                    $result = $qwindo->productByRange($params['limit'], $params['offset']);
+                } else {
+                    $result = array('Invalid params supplied');
+                }
+                break;
+
+            default:
+                $result = '{"success": false,
+                            "data": {
+                                "error_code": "QW-1000",
+                                "error": __("Identifier not set", "multisafepay")
+                            }}';
+        }
     }
 
     $json   = $qwindo->createJSON ($result);
@@ -86,8 +96,12 @@ class qwindo {
 
     function createJSON ($result){
 
-        $json = json_encode($result);
-        $json = utf8_encode($json);
+        if (is_array ($result)) {
+            $json = json_encode($result);
+            $json = utf8_encode($json);
+        }else{
+            $json = $result;
+        }
 
         if (isset ($_GET['test'])){
             echo print_r ( $result, true) . PHP_EOL;
@@ -107,18 +121,20 @@ class qwindo {
         $store = array();
         $store['allowed_countries']     = $this->getCountries ( $Countries->get_allowed_countries());
         $store['shipping_countries']    = $this->getCountries ( $Countries->get_shipping_countries());
-        $store['languages']             = array();
+        $store['languages']             = array(get_locale() => '');
         $store['stock_updates']         = get_option('woocommerce_manage_stock') == 'yes'       ? true : false;
         $store['allowed_currencies']    = array(get_woocommerce_currency());
         $store['including_tax']         = get_option('woocommerce_prices_include_tax') == 'yes' ? true : false;
-        $store['default_tax']           = array ( 'id'    =>  1,
-            'name'  => $base_tax_rate['label'],
-            'rate'  => $base_tax_rate['rate']
-        );
-        $store['shipping_tax']          = array ( 'id'    =>  1,
-            'name'  =>  $base_tax_rate['label'],
-            'rules'  => array ( WC()->countries->get_base_country() => wc_format_decimal ($base_tax_rate['rate'], 4))
-        );
+        $store['default_tax']           = array (
+                                            'id'    =>  1,
+                                            'name'  => $base_tax_rate['label'],
+                                            'rate'  => $base_tax_rate['rate']
+                                          );
+        $store['shipping_tax']          = array (
+                                            'id'    =>  1,
+                                            'name'  =>  $base_tax_rate['label'],
+                                            'rules' => array ( WC()->countries->get_base_country() => wc_format_decimal ($base_tax_rate['rate'], 4))
+                                          );
         $store['require_shipping']      = wc_shipping_enabled() ? true : false;
         $store['base_url']              = get_home_url();
         $store['country']               = WC()->countries->get_base_country();
@@ -155,7 +171,8 @@ class qwindo {
     function productByRange($limit=25, $offset=0){
 
         $result = array();
-        $args    = array(   'post_type'             => 'product',
+        $args    = array(
+            'post_type'             => 'product',
             'post_status'           => 'publish',
             'ignore_sticky_posts'   => 1,
             'posts_per_page'        => $limit,
@@ -189,7 +206,8 @@ class qwindo {
         $result = array();
         $product = WC()->product_factory->get_product($product_id);
         if ($product) {
-            $result = array('product_id'   => $product->get_id(),
+            $result = array(
+                'product_id'   => $product->get_id(),
                 'stock'        => (int)$product->get_stock_quantity());
         }
         return ($result);
@@ -197,70 +215,42 @@ class qwindo {
 
     function categories(){
 
-        $categories = array();
-
-        $taxonomy     = 'product_cat';
-        $orderby      = 'name';
-        $show_count   = 0;
-        $pad_counts   = 0;
-        $hierarchical = 1;
-        $title        = '';
-        $empty        = 0;
-
         $args = array(
-            'taxonomy'     => $taxonomy,
-            'orderby'      => $orderby,
-            'show_count'   => $show_count,
-            'pad_counts'   => $pad_counts,
-            'hierarchical' => $hierarchical,
-            'title_li'     => $title,
-            'hide_empty'   => $empty
+            'taxonomy'      => 'product_cat',
+            'orderby'       => 'name',
+            'order'         => 'ASC',
+            'hierarchical'  => true,
+            'hide_empty'    => false,
         );
 
-        $all_categories = get_categories( $args );
+        $categories = get_categories ($args);
+        $result = $this->get_cat_tree(0,$categories);
 
-        foreach ($all_categories as $cat) {
-            if($cat->category_parent == 0) {
-                $category_id = $cat->term_id;
+        return ($result);
+    }
 
-                $categories[$cat->term_id]['id']       = $cat->term_id;
-                $categories[$cat->term_id]['title']    = array(get_locale() => $cat->name);
+    function get_cat_tree($parent,$categories) {
+        $result = array();
+        foreach($categories as $category){
 
-                $categories[$cat->term_id]['active'] = true;
-                $categories[$cat->term_id]['hidden'] = false;
-                $categories[$cat->term_id]['anchor'] = false;
+            if ($parent != $category->parent) {
+                continue;
+            }
 
-                $categories[$cat->term_id]['cashback'] = (int)0;
+            $result[$category->term_id]['id']     = $category->term_id;
+            $result[$category->term_id]['title']  = array(get_locale() => $category->name);
 
-                $args2 = array(
-                    'taxonomy'     => $taxonomy,
-                    'child_of'     => 0,
-                    'parent'       => $category_id,
-                    'orderby'      => $orderby,
-                    'show_count'   => $show_count,
-                    'pad_counts'   => $pad_counts,
-                    'hierarchical' => $hierarchical,
-                    'title_li'     => $title,
-                    'hide_empty'   => $empty
-                );
+            $result[$category->term_id]['active'] = true;
+            $result[$category->term_id]['hidden'] = false;
+            $result[$category->term_id]['anchor'] = false;
+            $result[$category->term_id]['cashback'] = (int)0;
 
-                $sub_cats = get_categories( $args2 );
-
-                if ($sub_cats) {
-
-                    foreach($sub_cats as $sub_category) {
-                        $categories[$cat->term_id]['children'][] = array (  'id'       => $sub_category->term_id,
-                            'title'     => array(get_locale() => $sub_category->name),
-                            'active'    => true,
-                            'hidden'    => false,
-                            'anchor'    => true,
-
-                            'cashback'  => (int)0 );
-                    }
-                }
+            $category->children = $this->get_cat_tree($category->term_id, $categories);
+            if ( $category->children ){
+                $result[$category->term_id]['children'] = $category->children;
             }
         }
-        return ($categories);
+        return $result;
     }
 
     function shipping($params=array()) {
@@ -288,10 +278,8 @@ class qwindo {
         $_items = $JsonResponse->shopping_cart->items;
 
         foreach ($_items as $_item){
-            $product = WC()->product_factory->get_product($_item->merchant_item_id);
             $woocommerce->cart->add_to_cart($_item->merchant_item_id, $_item->quantity);
         }
-
 
         $active_methods = $this->doShipping();
         return $active_methods;
@@ -347,7 +335,6 @@ class qwindo {
                 $settings = $method->instance_settings;
 
                 // Check if there is a minimal amount to activate this shipping method (Free shipping)
-
                 if ( isset ($settings['min_amount'])){
                     $amount = isset ($params['amount']) ? $params['amount']/100 : 0;
                     if ($amount >= $settings['min_amount']){
@@ -450,13 +437,11 @@ class qwindo {
 
             $_product['variants']                  = $this->getVariations($product);
 
-
-            // remove all indexs with a value NULL
+            // remove all indexen with a value NULL
             $_product = array_filter($_product, function($value) { return $value !== NULL; });
         }
 
         return ( $_product);
-
     }
 
     private function getVariations ($product){
@@ -526,25 +511,19 @@ class qwindo {
 
     private function getTaxrates ($product) {
         $rules = array();
+
         $countries = WC()->countries->get_allowed_countries();
-
         foreach ($countries as $country_code => $country_desc) {
-
-            $tax = WC_Tax::find_rates(array ('tax_class' => $product->get_tax_class(),
-                'country'   => $country_code));
+            $tax = WC_Tax::find_rates(array ('tax_class' => $product->get_tax_class(), 'country' => $country_code));
             $tax = array_shift ($tax);
-
-            if (isset ($tax['rate'])) {
-                $rules[$country_code] = $tax['rate'];
-            }
+            $rules[$country_code] = isset ($tax['rate']) ? $tax['rate'] : 0;
         }
 
-        $result = array( 'id'    => $product->get_tax_class() ?: 0,
+        $result = array('id'    => $product->get_tax_class() ?: 0,
             'name'  => $tax['label'],
             'rules' => $rules);
 
         return $result;
-
     }
 
     private function getMetadata ($product){
@@ -568,6 +547,7 @@ class qwindo {
 
     private function formatAttribute ($input){
 
+        $result = array();
         $attributes = explode (', ', $input);
 
         foreach ($attributes as $attribute){
@@ -611,8 +591,9 @@ class qwindo {
 
     private function getImages ($product){
         $images = array();
-        $attachment_id_main       = array ($product->get_image_id());
-        $attachment_ids_secundair = $product->get_gallery_image_ids();
+        $attachment_id_main       = array_filter(array ($product->get_image_id()));
+        $attachment_ids_secundair = array_filter($product->get_gallery_image_ids());
+
         $attachment_ids = array_merge ($attachment_id_main, $attachment_ids_secundair);
 
         foreach ($attachment_ids as $index => $attachment_id) {
@@ -625,19 +606,25 @@ class qwindo {
         return ($images);
     }
 
-    public function msp_sync_on_product_update( $meta_id, $post_id, $meta_key, $meta_value ) {
-        if ( $meta_key == '_edit_lock' ) {
-            // we've been editing the post
-            if ( get_post_type( $post_id ) == 'product' ) {
 
-                // we've been editing a product
-                $product = wc_get_product( $post_id );
+    public static function msp_sync_on_product_update( $post_id, $post, $endpoint = '/api/product/data' ) {
 
-                self::msp_sync_stock($product->get_id(), (int)$product->get_stock_quantity());
-                self::msp_sync_category();
+        if ( get_post_type( $post_id ) == 'product' ) {
+
+            $product = new Qwindo();
+            $result = $product->productById($post_id);
+
+            $json = gzuncompress ($product->createJSON ($result));
+            $msp = new MultiSafepay_Client();
+            $msp->api_url = self::get_qwindo_API() . $endpoint . '?id='. $post_id;
+            $msp->auth    = self::getAuthorization($msp->api_url, $json, '');
+
+            if (get_post_status( $post_id ) == 'publish'){
+                $msp->qwindo->put($json, $endpoint);
+            }else{
+                $msp->qwindo->delete($json, $endpoint);
             }
         }
-        return true;
     }
 
     public static function msp_sync_product_stock( $post_id ) {
@@ -650,39 +637,37 @@ class qwindo {
 
     public static function msp_sync_stock( $id, $stock, $endpoint = '/api/stock/product' ) {
         $json = json_encode(array('product_id' => $id,
-            'stock'      => $stock));
+                                  'stock'      => $stock));
 
         $msp = new MultiSafepay_Client();
-        $msp->api_url = self::get_qwindo_API($msp) . $endpoint;
+        $msp->api_url = self::get_qwindo_API() . $endpoint;
         $msp->auth    = self::getAuthorization($msp->api_url, $json, '');
         $msp->qwindo->put($json, $endpoint);
     }
 
-    public static function msp_sync_store($endpoint = '/api/shop/data') {
-
+    public static function msp_sync_store($id, $endpoint = '/api/shop/data') {
         $store = new Qwindo();
         $result = $store->stores();
         $json = gzuncompress ($store->createJSON ($result));
-
         $msp = new MultiSafepay_Client();
-        $msp->api_url = self::get_qwindo_API($msp) . $endpoint;
+        $msp->api_url = self::get_qwindo_API() . $endpoint;
         $msp->auth    = self::getAuthorization($msp->api_url, $json, '');
         $msp->qwindo->put($json, $endpoint);
     }
 
-    public static function msp_sync_category($endpoint = '/api/categories/data') {
+    public static function msp_sync_category($id, $id2, $id3, $endpoint = '/api/categories/data') {
 
         $cat = new Qwindo();
         $result = $cat->categories();
         $json = gzuncompress ($cat->createJSON ($result));
 
         $msp = new MultiSafepay_Client();
-        $msp->api_url = self::get_qwindo_API($msp) . $endpoint;
+        $msp->api_url = self::get_qwindo_API() . $endpoint;
         $msp->auth    = self::getAuthorization($msp->api_url, $json, '');
         $msp->qwindo->put($json, $endpoint);
     }
 
-    public static function get_qwindo_API($msp) {
+    public static function get_qwindo_API() {
 
         return get_option('multisafepay_testmode') == 'yes' ? 'https://test.fastcheckout.com' : 'https://live.fastcheckout.com';
     }
@@ -719,15 +704,11 @@ class qwindo {
         $qwindo_key = get_option('multisafepay_qwindo_api_key');
         $hash_id    = get_option('multisafepay_qwindo_hash_id');
         if ( $qwindo_key && $hash_id ){
-            $timestamp = self::microtime_float();
+            $timestamp = microtime(true);
             $token = hash_hmac('sha512', $url . $timestamp . $data, $qwindo_key);
             $auth = base64_encode(sprintf('%s:%s:%s', $hash_id, $timestamp, $token));
             return $auth;
         }
-    }
-
-    public static function microtime_float(){
-        list($usec, $sec) = explode(" ", microtime());
-        return ((float)$usec + (float)$sec);
+        return null;
     }
 }

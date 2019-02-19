@@ -57,7 +57,7 @@ class MultiSafepay_CheckConnection
             return;
         }
 
-        // Test with oposite mode
+        // Test with opposite mode
         $msg = $this->tryToConnect($api, !$test_mode);
         if ($msg == null) {
             return ( ($test_mode ? __('This API-Key belongs to a LIVE-account', 'multisafepay') : __('This API-Key belongs to a TEST-account', 'multisafepay')));

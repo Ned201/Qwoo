@@ -134,7 +134,7 @@ class Multisafepay_Gateway_Abstract extends WC_Payment_Gateway
             $this->write_log($msg);
         }
 
-        if ($msp->error) {
+        if ($response->error) {
             return new WP_Error('multisafepay', 'Transaction status can\'t be updated:' . $msp->error_code . ' - ' . $msp->error);
         } else {
             return true;
@@ -143,11 +143,7 @@ class Multisafepay_Gateway_Abstract extends WC_Payment_Gateway
 
     public function getIcon()
     {
-//        $button_locale_code = get_locale();
-//        $image              = plugins_url('/Images/'.$button_locale_code.'/'.$this->getCode().'.png', dirname(__FILE__));
-          $image              = plugins_url('/Images/'.$this->getCode().'.png', dirname(__FILE__));
-
-
+        $image = plugins_url('/Images/'.$this->getCode().'.png', dirname(__FILE__));
         return ($image);
     }
 
@@ -245,7 +241,6 @@ class Multisafepay_Gateway_Abstract extends WC_Payment_Gateway
             "currency"              => get_woocommerce_currency(),
             "amount"                => round($order->get_total() * 100),
             "description"           => 'Order #'.$order->get_order_number(),
-//            "var1"                  => $order->order_key,
             "var2"                  => $order_id,
             "items"                 => $this->setItemList($order->get_items()),
             "manual"                => false,
@@ -253,7 +248,6 @@ class Multisafepay_Gateway_Abstract extends WC_Payment_Gateway
             "seconds_active"        => $this->getTimeActive(),
             "payment_options"       => array(
                 "notification_url"  => add_query_arg('type=initial', '', $this->getNurl()),
-//                "redirect_url"      => add_query_arg('type=redirect', '', $this->getNurl()),
                 "redirect_url"      => add_query_arg('utm_nooverride', '1', $this->get_return_url($order)),
                 "cancel_url"        => htmlspecialchars_decode(add_query_arg('key', $order_id, $order->get_cancel_order_url())),
                 "close_window"      => true
@@ -341,35 +335,6 @@ class Multisafepay_Gateway_Abstract extends WC_Payment_Gateway
             'rules' => array(array('rate' => '0.00')));
 
         $tax_array = array('BTW-0');
-
-        // Fee
-        /*              foreach ($order->get_items('fee') as $fee) {
-
-          $taxes = unserialize($fee['taxes']);
-          $taxes = array_shift ($taxes);
-
-          $tax_table_selector = 'fee';
-          $tax_percentage = round($taxes /$fee['cost'], 2);
-
-          $method_id = explode (':', $fee['method_id']);
-
-          $shopping_cart['items'][] = array (
-          'name'  		     => $fee['type'],
-          'description' 		 => $fee['name'],
-          'unit_price'  		 => $fee['cost'],
-          'quantity'    		 => 1,
-          'merchant_item_id' 	 => $method_id[0],
-          'tax_table_selector' => $tax_table_selector,
-          'weight' 		     => array ('unit'=> 0,  'value'=> 'KG')
-          );
-
-          if (!in_array($tax_table_selector, $tax_array)) {
-          array_push($checkout_options['tax_tables']['alternate'], array ('name' => $tax_table_selector, 'rules' => array (array ('rate' => $tax_percentage))));
-          array_push($tax_array, $tax_table_selector);
-          }
-          }
-         */
-
 
         //add item data
         $items = "<ul>\n";
@@ -462,7 +427,6 @@ class Multisafepay_Gateway_Abstract extends WC_Payment_Gateway
                 'unit_price'        => $shipping['cost'],
                 'quantity'          => 1,
                 'merchant_item_id'  => 'msp-shipping',
-//                'merchant_item_id'  => $method_id[0],
                 'tax_table_selector'=> $tax_table_selector,
                 'weight'            => array('unit' => 0, 'value' => 'KG') );
 

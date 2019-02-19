@@ -28,23 +28,18 @@ class MultiSafepay_Gateways
 
     public static function register()
     {
-        update_option('multisafepay_version', '3.2.0', 'yes');
+        update_option('multisafepay_version', '3.3.0', 'yes');
 
         add_filter('woocommerce_payment_gateways',              array(__CLASS__, '_getGateways'));
         add_filter('woocommerce_payment_gateways_settings',     array(__CLASS__, '_addGlobalSettings'), 1);
 
-        add_action('wp_loaded',                                 array(__CLASS__, 'MultiSafepay_Response'));
         add_action('init',                                      array(__CLASS__, 'addFCO'));
         add_action('woocommerce_api_' . strtolower(get_class()),array(__CLASS__, 'doFastCheckout'));
-
-//        add_action('template_redirect',                         array(__CLASS__, 'getRealPaymentMethod'), 10, 1);
-//        add_action('woocommerce_order_status_completed',        array(__CLASS__, 'getRealPaymentMethod'), 10, 1);
-
-        add_action('woocommerce_payment_complete',        array(__CLASS__, 'getRealPaymentMethod'), 10, 1);
+        add_action('woocommerce_payment_complete',              array(__CLASS__, 'getRealPaymentMethod'), 10, 1);
 
         add_action( 'rest_api_init', function ( $server ) {
-                $server->register_route( 'feeds', '/feeds', array(
-                'methods'  => array ('GET', 'POST', 'JSON', 'PUT'),
+            $server->register_route( 'feeds', '/feeds', array(
+                'methods'  => array ('GET', 'POST', 'JSON', 'PUT', 'DELETE'),
                 'callback' => array(__CLASS__, 'my_feeds')
             ) );
         } );
@@ -53,12 +48,25 @@ class MultiSafepay_Gateways
         $hash_id    = get_option('multisafepay_qwindo_hash_id');
 
         if ( $qwindo_key && $hash_id ){
-
             add_action( 'woocommerce_product_set_stock',    array('qwindo' , 'msp_sync_product_stock')  ,   10, 10 );
             add_action( 'woocommerce_variation_set_stock',  array('qwindo',  'msp_sync_variation_stock'),   10, 10 );
 
-            add_action( 'woocommerce_update_options',  		array('qwindo',  'msp_sync_store'),   10, 10 );
+            add_action( 'woocommerce_settings_save_general',  array('qwindo',  'msp_sync_store'));
+            add_action( 'woocommerce_settings_save_products', array('qwindo',  'msp_sync_store'));
+            add_action( 'woocommerce_settings_save_tax',      array('qwindo',  'msp_sync_store'));
+            add_action( 'woocommerce_settings_save_shipping', array('qwindo',  'msp_sync_store'));
+            add_action( 'woocommerce_settings_save_checkout', array('qwindo',  'msp_sync_store'));
+            add_action( 'woocommerce_settings_save_account ', array('qwindo',  'msp_sync_store'));
+            add_action( 'woocommerce_settings_save_email',    array('qwindo',  'msp_sync_store'));
+            add_action( 'woocommerce_settings_save_advanced', array('qwindo',  'msp_sync_store'));
 
+            // Sync products
+            add_action( 'save_post',  		                array('qwindo', 'msp_sync_on_product_update'), 10, 2);
+
+            // Sync category
+            add_action('create_term',                       array('qwindo', 'msp_sync_category'));
+            add_action('edit_term',                         array('qwindo', 'msp_sync_category'));
+            add_action('delete_term',                       array('qwindo', 'msp_sync_category'));
         }
 
 
@@ -87,8 +95,6 @@ class MultiSafepay_Gateways
         dbDelta($woocommerce_tables);
     }
 
-
-
     public static function my_feeds( $request_data ) {
         feeds($request_data);
     }
@@ -104,7 +110,6 @@ class MultiSafepay_Gateways
         }
 
         // Get real payment method
-        //
         $msp    = new MultiSafepay_Client();
         $helper = new MultiSafepay_Helper_Helper();
 
@@ -149,7 +154,7 @@ class MultiSafepay_Gateways
             }
         }
 
-        // Initial payment method differens from real payment method.
+        // Initial payment method difference from real payment method.
         if ($payment_method != false && get_post_meta( $order_id, '_payment_method', true ) != $payment_method) {
 
             $order->add_order_note( sprintf(__('Payment started with %s, but finally paid by %s', 'multisafepay'), get_post_meta( $order_id, '_payment_method_title', true ), $payment_method_title));
@@ -164,57 +169,57 @@ class MultiSafepay_Gateways
     public static function _getGateways($arrDefault)
     {
         $paymentOptions = array(
-              'MultiSafepay_Gateway_Afterpay'
-            , 'MultiSafepay_Gateway_Alipay'
-            , 'MultiSafepay_Gateway_Amex'
-            , 'MultiSafepay_Gateway_Bancontact'
-            , 'MultiSafepay_Gateway_Banktrans'
-            , 'MultiSafepay_Gateway_Belfius'
-            , 'MultiSafepay_Gateway_Creditcard'
-            , 'MultiSafepay_Gateway_Dirdeb'
-            , 'MultiSafepay_Gateway_Dotpay'
-            , 'MultiSafepay_Gateway_Einvoice'
-            , 'MultiSafepay_Gateway_Eps'
-            , 'MultiSafepay_Gateway_Ferbuy'
-            , 'MultiSafepay_Gateway_Giropay'
-            , 'MultiSafepay_Gateway_Ideal'
-            , 'MultiSafepay_Gateway_Ing'
-            , 'MultiSafepay_Gateway_Kbc'
-            , 'MultiSafepay_Gateway_Klarna'
-            , 'MultiSafepay_Gateway_Maestro'
-            , 'MultiSafepay_Gateway_Mastercard'
-            , 'MultiSafepay_Gateway_Payafter'
-            , 'MultiSafepay_Gateway_Paypal'
-            , 'MultiSafepay_Gateway_Paysafecard'
-            , 'MultiSafepay_Gateway_Santander'
-            , 'MultiSafepay_Gateway_Sofort'
-            , 'MultiSafepay_Gateway_Trustly'
-            , 'MultiSafepay_Gateway_Trustpay'
-            , 'MultiSafepay_Gateway_Visa');
+            'MultiSafepay_Gateway_Afterpay'
+        , 'MultiSafepay_Gateway_Alipay'
+        , 'MultiSafepay_Gateway_Amex'
+        , 'MultiSafepay_Gateway_Bancontact'
+        , 'MultiSafepay_Gateway_Banktrans'
+        , 'MultiSafepay_Gateway_Belfius'
+        , 'MultiSafepay_Gateway_Creditcard'
+        , 'MultiSafepay_Gateway_Dirdeb'
+        , 'MultiSafepay_Gateway_Dotpay'
+        , 'MultiSafepay_Gateway_Einvoice'
+        , 'MultiSafepay_Gateway_Eps'
+        , 'MultiSafepay_Gateway_Ferbuy'
+        , 'MultiSafepay_Gateway_Giropay'
+        , 'MultiSafepay_Gateway_Ideal'
+        , 'MultiSafepay_Gateway_Ing'
+        , 'MultiSafepay_Gateway_Kbc'
+        , 'MultiSafepay_Gateway_Klarna'
+        , 'MultiSafepay_Gateway_Maestro'
+        , 'MultiSafepay_Gateway_Mastercard'
+        , 'MultiSafepay_Gateway_Payafter'
+        , 'MultiSafepay_Gateway_Paypal'
+        , 'MultiSafepay_Gateway_Paysafecard'
+        , 'MultiSafepay_Gateway_Santander'
+        , 'MultiSafepay_Gateway_Sofort'
+        , 'MultiSafepay_Gateway_Trustly'
+        , 'MultiSafepay_Gateway_Trustpay'
+        , 'MultiSafepay_Gateway_Visa');
 
         $giftCards = array(
             'MultiSafepay_Gateway_Beautyandwellness'
-            , 'MultiSafepay_Gateway_Nationalebioscoopbon'
-            , 'MultiSafepay_Gateway_Boekenbon'
-            , 'MultiSafepay_Gateway_Erotiekbon'
-            , 'MultiSafepay_Gateway_Fashioncheque'
-            , 'MultiSafepay_Gateway_Fashiongiftcard'
-            , 'MultiSafepay_Gateway_Fietsbon'
-            , 'MultiSafepay_Gateway_Fijncadeau'
-            , 'MultiSafepay_Gateway_Gezondheidsbon'
-            , 'MultiSafepay_Gateway_Givacard'
-            , 'MultiSafepay_Gateway_Goodcard'
-            , 'MultiSafepay_Gateway_Liefcadeaukaart'
-            , 'MultiSafepay_Gateway_Nationaletuinbon'
-            , 'MultiSafepay_Gateway_Parfumcadeaukaart'
-            , 'MultiSafepay_Gateway_Podiumcadeaukaart'
-            , 'MultiSafepay_Gateway_Sportenfit'
-            , 'MultiSafepay_Gateway_VVVBon'
-            , 'MultiSafepay_Gateway_Webshopgiftcard'
-            , 'MultiSafepay_Gateway_Wellnessgiftcard'
-            , 'MultiSafepay_Gateway_Wijncadeau'
-            , 'MultiSafepay_Gateway_Winkelcheque'
-            , 'MultiSafepay_Gateway_Yourgift');
+        , 'MultiSafepay_Gateway_Nationalebioscoopbon'
+        , 'MultiSafepay_Gateway_Boekenbon'
+        , 'MultiSafepay_Gateway_Erotiekbon'
+        , 'MultiSafepay_Gateway_Fashioncheque'
+        , 'MultiSafepay_Gateway_Fashiongiftcard'
+        , 'MultiSafepay_Gateway_Fietsbon'
+        , 'MultiSafepay_Gateway_Fijncadeau'
+        , 'MultiSafepay_Gateway_Gezondheidsbon'
+        , 'MultiSafepay_Gateway_Givacard'
+        , 'MultiSafepay_Gateway_Goodcard'
+        , 'MultiSafepay_Gateway_Liefcadeaukaart'
+        , 'MultiSafepay_Gateway_Nationaletuinbon'
+        , 'MultiSafepay_Gateway_Parfumcadeaukaart'
+        , 'MultiSafepay_Gateway_Podiumcadeaukaart'
+        , 'MultiSafepay_Gateway_Sportenfit'
+        , 'MultiSafepay_Gateway_VVVBon'
+        , 'MultiSafepay_Gateway_Webshopgiftcard'
+        , 'MultiSafepay_Gateway_Wellnessgiftcard'
+        , 'MultiSafepay_Gateway_Wijncadeau'
+        , 'MultiSafepay_Gateway_Winkelcheque'
+        , 'MultiSafepay_Gateway_Yourgift');
 
 
         $giftcards_enabled = get_option("multisafepay_giftcards_enabled") == 'yes' ? true : false;
@@ -282,9 +287,11 @@ class MultiSafepay_Gateways
         );
         $addedSettings[] = array(
             'type'      => 'select',
-            'options'   => array(   'days'      => __('days', 'multisafepay'),
-                                    'hours'     => __('hours', 'multisafepay'),
-                                    'seconds'   => __('seconds', 'multisafepay')),
+            'options'   => array(
+                'days'      => __('days', 'multisafepay'),
+                'hours'     => __('hours', 'multisafepay'),
+                'seconds'   => __('seconds', 'multisafepay')
+            ),
             'id'        => 'multisafepay_time_unit',
         );
         $addedSettings[] = array(
@@ -331,32 +338,31 @@ class MultiSafepay_Gateways
             'css'       => 'min-width:800px;',
         );
 
-
         $addedSettings[] = array(
             'name'      => __('Qwindo API-Key', 'multisafepay'),
             'type'      => 'text',
-            'desc_tip'  => __('Windo API-Key from your MultiSafepay account.<br>Needed to use QWindo', 'multisafepay'),
+            'desc_tip'  => __('Qwindo API-Key from your MultiSafepay account.<br>Needed to use Qwindo', 'multisafepay'),
             'id'        => 'multisafepay_qwindo_api_key'
         );
 
         $addedSettings[] = array(
-            'name'      => __('QWindo Hash-ID', 'multisafepay'),
+            'name'      => __('Qwindo Hash-ID', 'multisafepay'),
             'type'      => 'text',
-            'desc_tip'  => __('Windo Hash-ID from your MultiSafepay account.<br>Needed to use QWindo', 'multisafepay'),
+            'desc_tip'  => __('Qwindo Hash-ID from your MultiSafepay account.<br>Needed to use Qwindo', 'multisafepay'),
             'id'        => 'multisafepay_qwindo_hash_id'
         );
 
-       $addedSettings[] = array(
+        $addedSettings[] = array(
             'name'      => __('Rounding policy', 'multisafepay'),
             'type'      => 'select',
             'options'   => array (
-                            'UP'        => __( 'Up', 'woocommerce' ),
-                            'DOWN'      => __( 'Down', 'woocommerce' ),
-                            'CEILING'   => __( 'Ceiling', 'woocommerce' ),
-                            'HALF_UP'   => __( 'Half_up', 'woocommerce' ),
-                            'HALF_DOWN' => __( 'Half_down', 'woocommerce' ),
-                            'HALF_EVEN' => __( 'Half_even', 'woocommerce' )
-                            ),
+                'UP'        => __( 'Up', 'woocommerce' ),
+                'DOWN'      => __( 'Down', 'woocommerce' ),
+                'CEILING'   => __( 'Ceiling', 'woocommerce' ),
+                'HALF_UP'   => __( 'Half_up', 'woocommerce' ),
+                'HALF_DOWN' => __( 'Half_down', 'woocommerce' ),
+                'HALF_EVEN' => __( 'Half_even', 'woocommerce' )
+            ),
             'desc_tip'  => __('Rounding policy for prices', 'multisafepay'),
             'id'        => 'multisafepay_rounding'
         );
@@ -409,7 +415,6 @@ class MultiSafepay_Gateways
             case 'cancel':
                 return true;
             case 'shipping':
-//                header("Content-Type:text/xml");
                 $fco = new MultiSafepay_Gateway_Fastcheckout();
                 print_r ($fco->get_shipping_methods_xml());
                 exit;
@@ -537,7 +542,7 @@ class MultiSafepay_Gateways
 
                 // Temp array needed for tax calculating coupons etc...
                 $tmp_tax = array();
-                foreach ($transactie->checkout_options->alternate as $tax) {
+                foreach ($transactie->checkout_options->tax_tables->alternate as $tax) {
                     $tmp_tax[$tax->name] = $tax->rules[0]->rate;
                 }
 
@@ -578,32 +583,7 @@ class MultiSafepay_Gateways
                         update_post_meta($order_id, '_order_tax', $new_order_tax);
                         $order->add_coupon($code, $unit_price, $applied_discount_tax);
                     }
-
-/*
-                    // Ordercoupon
-                    $applied_discount_tax = 0;
-                    if (!empty($sku->ordercoupon)) {
-                        $code = $sku->ordercoupon;
-                        $amount = (float) str_replace('-', '', $product['unit_price']);
-                        update_post_meta($order_id, '_cart_discount', $amount);
-                        update_post_meta($order_id, '_order_total', $details['transaction']['amount'] / 100);
-                        $tax_percentage = (($details['transaction']['amount'] / 100) - ($details['order-total']['total'] - $details['total-tax']['total'] + $details['shipping']['cost'])) / ($details['order-total']['total'] - $details['total-tax']['total'] + $details['shipping']['cost']);
-                        $applied_discount_tax = round(($amount * (1 + $tax_percentage)) - $amount, 2);
-                        update_post_meta($order_id, '_cart_discount_tax', $applied_discount_tax);
-                        $order->calculate_taxes();
-                        $order_data = get_post_meta($order_id);
-                        $new_order_tax = round($order_data['_order_tax'][0] - (($amount * (1 + $tax_percentage)) - $amount), 2);
-                        update_post_meta($order_id, '_order_tax', $new_order_tax);
-                        $id = $order->add_coupon($code, $amount, $applied_discount_tax);
-                    }
-
-                    // Cart Fee
-                    if (!empty($sku->fee)) {
-                        //TODO PROCESS CART FEE
-                    }
-*/
                 }
-
 
                 update_post_meta($order_id, '_order_total', $transactie->amount / 100);
                 $order->calculate_taxes();
@@ -735,9 +715,6 @@ class MultiSafepay_Gateways
             }
         }
 
-
-
-
         if ($cancel_order && ($status != 'completed')) {
             $order->update_status('wc-cancelled');
             $location = wc_get_cart_url();
@@ -754,9 +731,6 @@ class MultiSafepay_Gateways
 
         exit('OK');
     }
-
-
-
 
 
     public static function addFCO()
@@ -776,13 +750,10 @@ class MultiSafepay_Gateways
 
     public static function getButtonFCO()
     {
-
         if (get_woocommerce_currency() != 'EUR') {
             return;
         }
 
-//        $button_locale_code = get_locale();
-//        $image = plugins_url('/Images/' . $button_locale_code . '/button.png', __FILE__);
         $image = plugins_url('/Images/button.png', __FILE__);
 
         echo '<div id="msp_fastcheckout" >';
@@ -794,20 +765,22 @@ class MultiSafepay_Gateways
 
     public static function doFastCheckout()
     {
-
-
         global $woocommerce;
-        $msp = new MultiSafepay_Client();
+
+        $msp 	= new MultiSafepay_Client();
         $helper = new MultiSafepay_Helper_Helper();
-        $fco = new MultiSafepay_Gateway_Fastcheckout();
+        $fco 	= new MultiSafepay_Gateway_Fastcheckout();
         $qwindo = new Qwindo();
 
         $msp->setApiKey($helper->getApiKey());
         $msp->setApiUrl($helper->getTestMode());
 
-       $headers = $qwindo->get_nginx_headers();
+        $json_order = file_get_contents('php://input');
+        $my_order = json_decode($json_order, true);
 
-        // QWINDO?
+        $headers = $qwindo->get_nginx_headers();
+
+        // Is it a Qwindo order or not
         if(isset($headers['Content-Type']) && $headers['Content-Type'] == 'application/json'){
 
             $qwindo_key = get_option('multisafepay_qwindo_api_key');
@@ -816,52 +789,54 @@ class MultiSafepay_Gateways
             $base_url = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on' ? 'https' : 'http' ) . '://' .  $_SERVER['HTTP_HOST'];
             $url = $base_url . $_SERVER["REQUEST_URI"];
 
-            $timestamp = $qwindo->microtime_float();
+            $timestamp = microtime(true);
 
-            $auth = explode('|', base64_decode($headers['Auth']));
-            $message = $url.$auth[0].$hash_id;
+            //here we generate the auth token that will allow us to check the authorization for the call
+            $token = hash_hmac('sha512', $url.$timestamp.$json_order, $qwindo_key);
 
-            $token = hash_hmac('sha512', $message, $qwindo_key);
+            //generate the authorization base64 encoded string that includes the HASH ID, current call timestamp and generated token based on the url, timestamp and JSON data
+            $auth = base64_encode(sprintf('%s:%s:%s', $hash_id, $timestamp, $token));
 
-            if( (isset ($auth[1]) && $token !== $auth[1]) and round($timestamp - $auth[0]) > 10){
-                exit ('NOK');
-            }
-
-            $my_order = json_decode(file_get_contents('php://input'), true);
+            //add the header to the call you want to do
+            header('Content-type: application/json');
+            header('Auth: '.$auth);
 
             $done = $fco->create_qwindo_order($my_order);
-
-            header('Content-type: application/json');
 
             if ($done) {
                 die ('{"success": true, "data": {}}');
             } else {
-                die ('{"success": false, "data": {"error": "Could not create or update the order"}}');
+                die ("{ 'success': false,
+                        'data': {
+	                        'error_code': 'QW-10001',
+	                        'error': __('Could not create or update the order', 'multisafepay')
+	                    }}"
+                );
             }
 
         }else{
             $order_id = uniqid();
             $my_order = array(
-                        "type" => 'checkout',
-                        "order_id" => $order_id,
-                        "currency" => get_woocommerce_currency(),
-                        "amount" => round(WC()->cart->subtotal * 100),
-                        "description" => 'Order #' . $order_id,
-                        "var2" => $order_id,
-                        "items" => $fco->setItemList($fco->getItemsFCO()),
-                        "manual" => false,
-                        "seconds_active" => $fco->getTimeActive(),
-                        "payment_options" => array(
-                            "notification_url" => $fco->getNurl() . '&type=initial',
-                            "redirect_url" => $fco->getNurl() . '&type=redirect',
-                            "cancel_url" => WC()->cart->wc_get_cart_url() . 'index.php?type=cancel&cancel_order=true',
-                            "close_window" => true
-                        ),
-                        "google_analytics" => $fco->setGoogleAnalytics(),
-                        "plugin" => $fco->setPlugin($woocommerce),
-                        "gateway_info" => '',
-                        "shopping_cart" => $fco->setCartFCO(),
-                        "checkout_options" => $fco->setCheckoutOptionsFCO(),
+                "type" => 'checkout',
+                "order_id" => $order_id,
+                "currency" => get_woocommerce_currency(),
+                "amount" => round(WC()->cart->subtotal * 100),
+                "description" => 'Order #' . $order_id,
+                "var2" => $order_id,
+                "items" => $fco->setItemList($fco->getItemsFCO()),
+                "manual" => false,
+                "seconds_active" => $fco->getTimeActive(),
+                "payment_options" => array(
+                    "notification_url" => $fco->getNurl() . '&type=initial',
+                    "redirect_url" => $fco->getNurl() . '&type=redirect',
+                    "cancel_url" => wc_get_cart_url() . 'index.php?type=cancel&cancel_order=true',
+                    "close_window" => true
+                ),
+                "google_analytics" => $fco->setGoogleAnalytics(),
+                "plugin" => $fco->setPlugin($woocommerce),
+                "gateway_info" => '',
+                "shopping_cart" => $fco->setCartFCO(),
+                "checkout_options" => $fco->setCheckoutOptionsFCO(),
             );
         }
 
@@ -891,5 +866,4 @@ class MultiSafepay_Gateways
             wp_redirect($url);
         }
     }
-
 }

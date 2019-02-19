@@ -176,7 +176,4 @@ class MultiSafepay_Gateway_Klarna extends MultiSafepay_Gateway_Abstract
 
         return parent::process_payment($order_id);
     }
-
 }
-
-?>

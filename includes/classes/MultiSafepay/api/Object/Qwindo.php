@@ -9,38 +9,30 @@
 
 class MultiSafepay_ObjectQwindo extends MultiSafepay_ObjectCore
 {
-
     public $success;
     public $data;
 
     public function delete($body, $endpoint = '')
     {
-        $result = parent::delete(json_encode($body), $endpoint);
-        $this->success = $result->success;
+        $result = parent::delete($body, $endpoint);
         return $result;
     }
 
     public function put($body, $endpoint = '')
     {
         $result = parent::put($body, $endpoint);
-//        $this->success = $result->success;
         return $result;
     }
 
     public function post($body, $endpoint = '')
     {
         $result = parent::post($body, $endpoint);
-        $this->success = $result->success;
-        $this->data = $result->data;
-        return $this->data;
+        return $result;
     }
 
     public function get($endpoint, $id, $body = array(), $query_string = false)
     {
-        $result = parent::get(json_decode($body), $endpoint);
-
-        $this->success = $result->success;
-        $this->data = $result->data;
-        return $this->data;
+        $result = parent::get($body, $endpoint);
+        return $result;
     }
 }

@@ -95,7 +95,6 @@ class MultiSafepay_Client
     /*
      * Parses and splits up an address in street and housenumber
      */
-
     private function parseAddress($adress, $seperaatAddition = false)
     {
         $street = '';
@@ -124,7 +123,6 @@ class MultiSafepay_Client
         }
 
         return array($street, $number, $numberAddition);
-        //  return array('street' => $street, 'number' => $number, 'numberAddition' => $numberAddition);
     }
 
     private function rstrpos($haystack, $needle, $offset = null)
@@ -146,7 +144,7 @@ class MultiSafepay_Client
 
     public function processAPIRequest($http_method, $endpoint, $http_body = null)
     {
-//        $isQwindo = strpos ($endpoint, 'api');
+
         $isQwindo = in_array ($endpoint, array ('/api/product/data',
                                                 '/api/stock/product',
                                                 '/api/stock/variant',
@@ -177,12 +175,6 @@ class MultiSafepay_Client
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $http_method);
-
-        //        curl_setopt($ch, CURLINFO_HEADER_OUT, true);
-        //        curl_setopt($ch, CURLOPT_ENCODING, "");
-        //        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
-        //        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        //        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
 
         if ($http_body !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $http_body);

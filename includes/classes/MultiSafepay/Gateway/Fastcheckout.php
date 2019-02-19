@@ -38,12 +38,10 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
         return;
     }
 
-
     public static function getGatewayCode()
     {
         return;
     }
-
 
     public function getItemsFCO()
     {
@@ -199,23 +197,14 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
         return $outxml;
     }
 
-
-
     public function get_shipping_methods($data)
     {
-
-// Transaction not available at this point.
-//        $msp = new Client();
-//        $transaction = $msp->getTransaction($data['transactionid']);
-
         $shipping_packages = $this->get_shipping_packages($data);
 
         WC()->shipping->calculate_shipping($shipping_packages);
 
         return ( WC()->shipping->packages[0]['rates']);
     }
-
-
 
     private function get_shipping_packages($data=null)
     {
@@ -245,8 +234,6 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
 
         return apply_filters('woocommerce_cart_shipping_packages', $packages);
     }
-
-
 
     function create_qwindo_order($qwindo) {
         global $woocommerce;
@@ -294,12 +281,10 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
             return false;
 
 
-
         $order->set_address($billing_address,  'billing');
         $order->set_address($shipping_address, 'shipping');
 
         // Add shipping method
-
         foreach ($woocommerce->shipping->load_shipping_methods() as $shipping_method) {
             if ( strpos($shipping['provider'], $shipping_method->id) !== false ){
 
@@ -336,7 +321,7 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
 
         // Add items
         foreach ($items as $item){
-            $product_id = $item['product_id'];
+            $product_id = $item['merchant_item_id'];
 
             if ($product_id){
                 $product = wc_get_product($product_id);
@@ -357,11 +342,8 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
             $order->add_order_note(sprintf(__('Multisafepay payment status %s', 'multisafepay'), $qwindo['status']));
             $order->payment_complete();
         }else{
-//          $order->reduce_order_stock();
             $order->update_status($qwindo['status'], 'Imported order', TRUE);
         }
-//        $order->save();
         return true;
     }
-
 }

@@ -22,7 +22,6 @@
  */
 class MultiSafepay_ObjectOrders extends MultiSafepay_ObjectCore
 {
-
     public $success;
     public $data;
 
@@ -47,7 +46,6 @@ class MultiSafepay_ObjectOrders extends MultiSafepay_ObjectCore
         $result = parent::post(json_encode($body), $endpoint);
         $this->success = $result->success;
         $this->data = $result->data;
-
         return $this->data;
     }
 
@@ -55,5 +53,4 @@ class MultiSafepay_ObjectOrders extends MultiSafepay_ObjectCore
     {
         return $this->data->payment_url;
     }
-
 }
