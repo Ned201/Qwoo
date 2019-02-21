@@ -571,7 +571,7 @@ class qwindo {
                 $attribute = isset( $attributes[ $attr ] ) ? $attributes[ $attr ] : $attributes[ 'pa_' . $attr ];
 
                 if ( $attribute['is_taxonomy'] ) {
-                    $value = implode( ', ', wc_get_product_terms( $product->get_id(), $attribute['name'], array( 'fields' => 'names' ) ) );
+                    $value = implode( ' | ', wc_get_product_terms( $product->get_id(), $attribute['name'], array( 'fields' => 'names' ) ) );
                 } else {
                     $value = $attribute['value'];
                 }
