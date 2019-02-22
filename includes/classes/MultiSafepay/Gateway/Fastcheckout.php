@@ -238,6 +238,13 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
     function create_qwindo_order($qwindo) {
         global $woocommerce;
 
+        // Return if order already exists.
+        $orders = wc_get_orders( array(	'created_via' => $qwindo['order_id'] ) );
+        if ($order) {
+            return true;
+        }
+
+
         $customer = $qwindo['customer'];
         $delivery = $qwindo['delivery'];
         $items    = $qwindo['shopping_cart']['items'];
@@ -338,12 +345,12 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
         }
 
 
-        if ($qwindo['status'] == 'completed'){
-            $order->add_order_note(sprintf(__('Multisafepay payment status %s', 'multisafepay'), $qwindo['status']));
-            $order->payment_complete();
-        }else{
-            $order->update_status($qwindo['status'], 'Imported order', TRUE);
-        }
+        $order->set_created_via($qwindo['order_id']);
+
+        $order->add_order_note(sprintf(__('QWindo Order')));
+        $order->add_order_note(sprintf(__('Multisafepay payment status %s', 'multisafepay'), $qwindo['status']));
+        $order->payment_complete();
+
         return true;
     }
 }
