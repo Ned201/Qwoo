@@ -246,7 +246,7 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
 
 
         $customer = $qwindo['customer'];
-        $delivery = $qwindo['delivery'];
+        $delivery = $qwindo['delivery']?: $qwindo['customer'];
         $items    = $qwindo['shopping_cart']['items'];
 
         // Get the first (and only) element of the shipping array

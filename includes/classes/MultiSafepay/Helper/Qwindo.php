@@ -16,13 +16,13 @@ function feeds()
         $url        = $base_url . $_SERVER["REQUEST_URI"];
 
         $header     = $qwindo->get_nginx_headers();
-        $timestamp  = $qwindo->microtime_float();
+        $timestamp  = microtime(true);
         $auth       = explode('|', base64_decode($header['Auth']));
 
         $message    = $url.$auth[0] . HASH_ID;
         $token      = hash_hmac('sha512', $message, QWINDO_KEY);
 
-        if($token !== $auth[1] and round($timestamp - $auth[0]) > 10){
+        if($token !== $auth[1] || round($timestamp - $auth[0]) > 10){
             $result = '{"success": false,
                         "data": {
                             "error_code": "QW-3000",
