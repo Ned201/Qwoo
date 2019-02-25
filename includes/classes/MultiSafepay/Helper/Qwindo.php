@@ -10,10 +10,14 @@ function feeds()
     $qwindo = new Qwindo();
     $result = null;
 
-    if (!isset ($params['test']) && $params['identifier'] != 'shipping'){
+    if ($params['identifier'] != 'shipping'){
 
-        $base_url   = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on' ? 'https' : 'http' ) . '://' .  $_SERVER['HTTP_HOST'];
-        $url        = $base_url . $_SERVER["REQUEST_URI"];
+        global $wp;
+        $url = home_url( add_query_arg( array(), $wp->request ));
+        if ($_SERVER['QUERY_STRING']){
+            $url .= '?'. $_SERVER['QUERY_STRING'];
+        }
+
 
         $header     = $qwindo->get_nginx_headers();
         $timestamp  = microtime(true);
@@ -103,11 +107,13 @@ class qwindo {
             $json = $result;
         }
 
-        if (isset ($_GET['test'])){
-            echo print_r ( $result, true) . PHP_EOL;
-            echo $json . PHP_EOL;
-        }
-//       return ($json);
+
+        //
+        //todo: Remove when developing is done
+//        echo print_r ( $result, true) . PHP_EOL;
+//        echo $json . PHP_EOL;
+
+
         return (gzcompress($json));
     }
 

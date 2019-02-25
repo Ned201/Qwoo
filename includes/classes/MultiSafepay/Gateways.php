@@ -786,8 +786,12 @@ class MultiSafepay_Gateways
             $qwindo_key = get_option('multisafepay_qwindo_api_key');
             $hash_id    = get_option('multisafepay_qwindo_hash_id');
 
-            $base_url = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on' ? 'https' : 'http' ) . '://' .  $_SERVER['HTTP_HOST'];
-            $url = $base_url . $_SERVER["REQUEST_URI"];
+            global $wp;
+            $url = home_url( add_query_arg( array(), $wp->request ));
+            if ($_SERVER['QUERY_STRING']){
+                $url .= '?'. $_SERVER['QUERY_STRING'];
+            }
+
 
             $timestamp = microtime(true);
 
