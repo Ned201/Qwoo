@@ -1,7 +1,8 @@
 <?php
 
-function feeds()
+function feeds($request_data)
 {
+    global $wp;
     $params = filter_input_array(INPUT_GET, FILTER_SANITIZE_STRING);
 
     define ('QWINDO_KEY', get_option('multisafepay_qwindo_api_key'));
@@ -10,32 +11,27 @@ function feeds()
     $qwindo = new Qwindo();
     $result = null;
 
-    if ($params['identifier'] != 'shipping'){
-
-        global $wp;
-        $url = home_url( add_query_arg( array(), $wp->request ));
-        if ($_SERVER['QUERY_STRING']){
-            $url .= '?'. $_SERVER['QUERY_STRING'];
-        }
-
-
-        $header     = $qwindo->get_nginx_headers();
-        $timestamp  = microtime(true);
-        $auth       = explode('|', base64_decode($header['Auth']));
-
-        $message    = $url.$auth[0] . HASH_ID;
-        $token      = hash_hmac('sha512', $message, QWINDO_KEY);
-
-        if($token !== $auth[1] || round($timestamp - $auth[0]) > 10){
-            $result = '{"success": false,
-                        "data": {
-                            "error_code": "QW-3000",
-                            "error": __("Signature error", "multisafepay")
-                        }}';
-        }
+    $url = home_url( add_query_arg( array(), $wp->request ));
+    if ($_SERVER['QUERY_STRING']){
+        $url .= '?'. $_SERVER['QUERY_STRING'];
     }
 
-    if (!$result) {
+    $header     = $qwindo->get_nginx_headers();
+    $timestamp  = microtime(true);
+
+    $auth       = explode('|', base64_decode($header['Auth']));
+
+    $message    = $url.$auth[0] . HASH_ID;
+    $token      = hash_hmac('sha512', $message, QWINDO_KEY);
+
+    if ($token !== $auth[1] || round($timestamp - $auth[0]) > 10){
+        $result = '{"success": false,
+					"data": {
+						"error_code": "QW-3000",
+						"error": __("Signature error", "multisafepay")
+					}}';
+    }else{
+
         switch ($params['identifier']) {
 
             case 'total_products':
@@ -93,9 +89,6 @@ function feeds()
     die ($json);
 }
 
-
-
-
 class qwindo {
 
     function createJSON ($result){
@@ -107,26 +100,19 @@ class qwindo {
             $json = $result;
         }
 
-
-        //
-        //todo: Remove when developing is done
-//        echo print_r ( $result, true) . PHP_EOL;
-//        echo $json . PHP_EOL;
-
-
         return (gzcompress($json));
     }
 
     function stores(){
 
-        $Countries = new WC_Countries;
+        $countries = new WC_Countries;
 
         $base_tax_rate = WC_Tax::get_base_tax_rates();
         $base_tax_rate  = array_shift ( $base_tax_rate );
 
         $store = array();
-        $store['allowed_countries']     = $this->getCountries ( $Countries->get_allowed_countries());
-        $store['shipping_countries']    = $this->getCountries ( $Countries->get_shipping_countries());
+        $store['allowed_countries']     = $this->getCountries ( $countries->get_allowed_countries());
+        $store['shipping_countries']    = $this->getCountries ( $countries->get_shipping_countries());
         $store['languages']             = array(get_locale() => '');
         $store['stock_updates']         = get_option('woocommerce_manage_stock') == 'yes'       ? true : false;
         $store['allowed_currencies']    = array(get_woocommerce_currency());
@@ -156,9 +142,9 @@ class qwindo {
     function total_products(){
 
         $result = array();
-        $productCount = wp_count_posts( 'product' );
-        if ($productCount){
-            $result = array('total'   => $productCount->publish);
+        $product_count = wp_count_posts( 'product' );
+        if ($product_count){
+            $result = array('total'   => $product_count->publish);
         }
 
         return($result);
@@ -199,9 +185,9 @@ class qwindo {
             $products->the_post();
 
             $id        = get_the_ID();
-            $_product  = WC()->product_factory->get_product($id);
+            $product  = WC()->product_factory->get_product($id);
 
-            $result[] = $this->get_product_details($_product);
+            $result[] = $this->get_product_details($product);
 
         }
         return ($result);
@@ -262,10 +248,10 @@ class qwindo {
     function shipping($params=array()) {
 
         header('Content-type: application/json');
-        $JsonResponse = json_decode( file_get_contents("php://input"));
+        $json_response = json_decode( file_get_contents("php://input"));
 
-        if ( $JsonResponse){
-            $shipping_methods = $this->get_specific_shipping_methods($JsonResponse);
+        if ($json_response){
+            $shipping_methods = $this->get_specific_shipping_methods($json_response);
         }else{
             $shipping_methods = $this->get_global_shipping_methods($params);
         }
@@ -273,18 +259,20 @@ class qwindo {
         return $shipping_methods;
     }
 
-    private function get_specific_shipping_methods($JsonResponse) {
+    private function get_specific_shipping_methods($json_response) {
 
-        global $woocommerce;
-
-        // Empty cart
-        $woocommerce->cart->empty_cart();
+        // Needed since v3.6.0
+        wc()->frontend_includes();
+        wc()->session = new WC_Session_Handler();
+        wc()->session->init();
+        wc()->customer = new WC_Customer( get_current_user_id(), true );
+        wc()->cart = new WC_Cart();
 
         // Fill cart with items from json response
-        $_items = $JsonResponse->shopping_cart->items;
+        $items = $json_response->shopping_cart->items;
 
-        foreach ($_items as $_item){
-            $woocommerce->cart->add_to_cart($_item->merchant_item_id, $_item->quantity);
+        foreach ($items as $item){
+            wc()->cart->add_to_cart($item->merchant_item_id, $item->quantity);
         }
 
         $active_methods = $this->doShipping();
@@ -297,7 +285,7 @@ class qwindo {
 
         $packages = WC()->shipping->get_packages();
 
-        foreach ( $packages as $i => $package ) {
+        foreach ( $packages as $key => $package ) {
 
             foreach ($package['rates'] as $shipping_method) {
 
@@ -309,15 +297,14 @@ class qwindo {
                 }
 
                 list ($name, $id) = explode (':', $shipping_method->id);
-                $active_methods[] = array(  'id'        => $id,
-                    'type'      => $name,
-                    'provider'  => $shipping_method->id,
-                    'name'      => $shipping_method->label,
-                    'price'     => $shipping_method->cost,
-                    'tax'       => array ('name' => $name,
-                        'id'   => $id,
-                        'rate' => wc_format_decimal ($rate, 4))
-                );
+                $active_methods[] = array(  'id'       => $id,
+                                            'type'     => $name,
+                                            'provider' => $shipping_method->id,
+                                            'name'     => $shipping_method->label,
+                                            'price'    => $shipping_method->cost,
+                                            'tax'      => array ('name' => $name,
+                                                                 'id'   => $id,
+                                                                 'rate' => wc_format_decimal ($rate, 4)));
             }
         }
 
@@ -328,11 +315,11 @@ class qwindo {
 
         $active_methods = array();
         $delivery_zones = WC_Shipping_Zones::get_zones();
-        foreach ((array) $delivery_zones as $key => $the_zone ) {
-            $id 		= $the_zone['id'];
-            $name 		= $the_zone['zone_name'];
+        foreach ((array) $delivery_zones as $key => $delivery_zone ) {
+            $id 		= $delivery_zone['id'];
+            $name 		= $delivery_zone['zone_name'];
 
-            $methods  = $the_zone['shipping_methods'];
+            $methods  = $delivery_zone['shipping_methods'];
 
             foreach ($methods as $method){
                 $provider = $method->id;
@@ -354,7 +341,7 @@ class qwindo {
                 }
 
                 $allowed_areas = array();
-                $locations 	= $the_zone['zone_locations'];
+                $locations 	= $delivery_zone['zone_locations'];
 
                 foreach ( (array) $locations as $location){
 
@@ -374,12 +361,12 @@ class qwindo {
                 }
                 if ( in_array ($country, $allowed_areas) ) {
                     $active_methods[] = array(  'id'        	=> $id,
-                        'type'      	=> $type,
-                        'provider'  	=> $provider,
-                        'name'      	=> $name,
-                        'price'     	=> $cost,
-                        'allowed_areas' => $allowed_areas
-                    );
+                                                'type'      	=> $type,
+                                                'provider'  	=> $provider,
+                                                'name'      	=> $name,
+                                                'price'     	=> $cost,
+                                                'allowed_areas' => $allowed_areas
+                                            );
                 }
             }
         }
@@ -439,7 +426,7 @@ class qwindo {
             $_product['tax']                       = $this->getTaxrates($product);
             $_product['metadata']                  = $this->getMetadata($product);
             $_product['product_image_urls']        = $this->getImages($product);
-            $_product['attributes']                = $product->has_attributes() ?  $this->getAttributes($product) : NULL;
+            $_product['attributes']                = $product->has_attributes() ?  $this->getAttributes($product) : array();
 
             $_product['variants']                  = $this->getVariations($product);
 
@@ -517,6 +504,7 @@ class qwindo {
 
     private function getTaxrates ($product) {
         $rules = array();
+        $result = array();
 
         $countries = WC()->countries->get_allowed_countries();
         foreach ($countries as $country_code => $country_desc) {
@@ -525,10 +513,11 @@ class qwindo {
             $rules[$country_code] = isset ($tax['rate']) ? $tax['rate'] : 0;
         }
 
-        $result = array('id'    => $product->get_tax_class() ?: 0,
-            'name'  => $tax['label'],
-            'rules' => $rules);
-
+        if ($tax) {
+            $result = array('id' => $product->get_tax_class() ?: 0,
+                'name' => $tax['label'],
+                'rules' => $rules);
+        }
         return $result;
     }
 
@@ -577,7 +566,7 @@ class qwindo {
                 $attribute = isset( $attributes[ $attr ] ) ? $attributes[ $attr ] : $attributes[ 'pa_' . $attr ];
 
                 if ( $attribute['is_taxonomy'] ) {
-                    $value = implode( ' | ', wc_get_product_terms( $product->get_id(), $attribute['name'], array( 'fields' => 'names' ) ) );
+                    $value = implode( ', ', wc_get_product_terms( $product->get_id(), $attribute['name'], array( 'fields' => 'names' ) ) );
                 } else {
                     $value = $attribute['value'];
                 }
@@ -634,11 +623,11 @@ class qwindo {
     }
 
     public static function msp_sync_product_stock( $post_id ) {
-        self::msp_sync_stock($post_id->id, $post_id->stock);
+        self::msp_sync_stock($post_id->get_id(), $post_id->get_stock_quantity());
     }
 
     public static function msp_sync_variation_stock( $post_id ) {
-        self::msp_sync_stock($post_id->variation_id, $post_id->stock, '/api/stock/variant');
+        self::msp_sync_stock($post_id->get_id(), $post_id->get_stock_quantity(), '/api/stock/variant');
     }
 
     public static function msp_sync_stock( $id, $stock, $endpoint = '/api/stock/product' ) {
@@ -661,7 +650,7 @@ class qwindo {
         $msp->qwindo->put($json, $endpoint);
     }
 
-    public static function msp_sync_category($id, $id2, $id3, $endpoint = '/api/categories/data') {
+    public static function msp_sync_category($id, $endpoint = '/api/categories/data') {
 
         $cat = new Qwindo();
         $result = $cat->categories();
@@ -709,12 +698,12 @@ class qwindo {
     public static function getAuthorization($url, $data, $observer=''){
         $qwindo_key = get_option('multisafepay_qwindo_api_key');
         $hash_id    = get_option('multisafepay_qwindo_hash_id');
+        $auth = null;
         if ( $qwindo_key && $hash_id ){
             $timestamp = microtime(true);
             $token = hash_hmac('sha512', $url . $timestamp . $data, $qwindo_key);
             $auth = base64_encode(sprintf('%s:%s:%s', $hash_id, $timestamp, $token));
-            return $auth;
         }
-        return null;
+        return $auth;
     }
 }

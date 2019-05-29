@@ -238,11 +238,12 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
     function create_qwindo_order($qwindo) {
         global $woocommerce;
 
-        // Return if order already exists.
-        $orders = wc_get_orders( array(	'created_via' => $qwindo['order_id'] ) );
-        if ($order) {
-            return true;
-        }
+		
+		// return if order already exists.
+		$orders = wc_get_orders( array(	'created_via' => $qwindo['order_id'] ) );
+		if ($orders) {
+			return true;
+		}
 
 
         $customer = $qwindo['customer'];
@@ -282,11 +283,11 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
         $order = wc_create_order();
 
         // Compatiblity Woocommerce 2.x and 3.x
-        $orderID     = (method_exists($order,'get_id'))     ? $order->get_id()      : $order->id;
+        $orderID = (method_exists($order,'get_id')) ? $order->get_id() : $order->id;
 
-        if (!$orderID)
+        if (!$orderID) {
             return false;
-
+        }
 
         $order->set_address($billing_address,  'billing');
         $order->set_address($shipping_address, 'shipping');
@@ -349,7 +350,8 @@ class MultiSafepay_Gateway_Fastcheckout extends MultiSafepay_Gateway_Abstract
 
         $order->add_order_note(sprintf(__('QWindo Order')));
         $order->add_order_note(sprintf(__('Multisafepay payment status %s', 'multisafepay'), $qwindo['status']));
-        $order->payment_complete();
+        $order->update_status('wc-processing');
+//      $order->payment_complete();
 
         return true;
     }

@@ -33,6 +33,7 @@ class MultiSafepay_Gateways
         add_filter('woocommerce_payment_gateways',              array(__CLASS__, '_getGateways'));
         add_filter('woocommerce_payment_gateways_settings',     array(__CLASS__, '_addGlobalSettings'), 1);
 
+        add_action('init',                                      array(__CLASS__, 'MultiSafepay_Response'));
         add_action('init',                                      array(__CLASS__, 'addFCO'));
         add_action('woocommerce_api_' . strtolower(get_class()),array(__CLASS__, 'doFastCheckout'));
         add_action('woocommerce_payment_complete',              array(__CLASS__, 'getRealPaymentMethod'), 10, 1);
@@ -139,7 +140,7 @@ class MultiSafepay_Gateways
         $gateway              = $transactie->payment_details->type;
 
         $tablename = $wpdb->prefix . 'options';
-        $results = $wpdb->get_results("SELECT option_name, option_value FROM {$tablename} WHERE `option_name` like 'woocommerce_multisafepay_%'");
+        $results   = $wpdb->get_results("SELECT option_name, option_value FROM {$tablename} WHERE `option_name` like 'woocommerce_multisafepay_%'");
 
         foreach( $results as $result)
         {
@@ -169,7 +170,7 @@ class MultiSafepay_Gateways
     public static function _getGateways($arrDefault)
     {
         $paymentOptions = array(
-            'MultiSafepay_Gateway_Afterpay'
+          'MultiSafepay_Gateway_Afterpay'
         , 'MultiSafepay_Gateway_Alipay'
         , 'MultiSafepay_Gateway_Amex'
         , 'MultiSafepay_Gateway_Bancontact'
@@ -198,7 +199,7 @@ class MultiSafepay_Gateways
         , 'MultiSafepay_Gateway_Visa');
 
         $giftCards = array(
-            'MultiSafepay_Gateway_Beautyandwellness'
+          'MultiSafepay_Gateway_Beautyandwellness'
         , 'MultiSafepay_Gateway_Nationalebioscoopbon'
         , 'MultiSafepay_Gateway_Boekenbon'
         , 'MultiSafepay_Gateway_Erotiekbon'
@@ -389,64 +390,50 @@ class MultiSafepay_Gateways
 
     public static function Multisafepay_Response()
     {
+        global $wpdb, $woocommerce;
 
+        $page           = filter_input(INPUT_GET, 'page',           FILTER_SANITIZE_STRING);
         $type           = filter_input(INPUT_GET, 'type',           FILTER_SANITIZE_STRING);
         $trns_id        = filter_input(INPUT_GET, 'transactionid',  FILTER_SANITIZE_STRING);
-        $identifier     = filter_input(INPUT_GET, 'identifier',     FILTER_SANITIZE_STRING);
         $cancel_order   = filter_input(INPUT_GET, 'cancel_order',   FILTER_SANITIZE_STRING);
 
-        if (empty($trns_id) && empty($identifier)) {
-            return;
+        // Not comming form MultiSafepay
+        if ($page != 'multisafepaynotify'){
+            return true;
         }
 
-        global $wpdb, $woocommerce;
+        if (empty($trns_id) || $type == 'cancel'){
+            return true;
+        }
+
+        $redirect        = $type == 'redirect' ? true : false;
+        $initial_request = $type == 'initial'  ? true : false;
+
+        if ($type == 'shipping'){
+            $fco = new MultiSafepay_Gateway_Fastcheckout();
+            print_r ($fco->get_shipping_methods_xml());
+            exit;
+        }
+
         $helper = new MultiSafepay_Helper_Helper();
 
-        $redirect        = false;
-        $initial_request = false;
-
-        switch ($type) {
-            case 'initial':
-                $initial_request = true;
-                break;
-            case 'redirect':
-                $redirect = true;
-                break;
-            case 'cancel':
-                return true;
-            case 'shipping':
-                $fco = new MultiSafepay_Gateway_Fastcheckout();
-                print_r ($fco->get_shipping_methods_xml());
-                exit;
-            default:
-                break;
-        }
-
-
-        // If no transaction-id there is nothing to process..
-        if (empty($trns_id)) {
-            return;
-        }
-
-        $msp = new MultiSafepay_Client();
-        $helper = new MultiSafepay_Helper_Helper();
-
+        $msp    = new MultiSafepay_Client();
         $msp->setApiKey($helper->getApiKey());
         $msp->setApiUrl($helper->getTestMode());
 
         try {
-            $msg = null;
             $transactie = $msp->orders->get($trns_id, 'orders', array(), false);
         } catch (Exception $e) {
 
             $msg = htmlspecialchars($e->getMessage());
             $helper->write_log($msg);
-            return;
         }
+
+        if ($transactie->var3 == 'QWINDO')
+            return true;
 
         $updated  = false;
         $status   = $transactie->status;
-
 
         if ($transactie->fastcheckout == 'NO' &&  isset ($transactie->var2)) {
             $order_id = $transactie->var2;
@@ -456,7 +443,6 @@ class MultiSafepay_Gateways
             $order_id = $wpdb->get_var($sql);
         }
         $order   = wc_get_order($order_id);
-
 
 
         if ($cancel_order && ($status != 'completed')) {
@@ -524,7 +510,7 @@ class MultiSafepay_Gateways
                     }
                 }
 
-                $order->add_order_note($transactie->transaction_id);
+                $order->add_order_note(__("transaction: ", "multisafepay") . $transactie->transaction_id);
 
                 // Add payment method
                 $gateways = new WC_Payment_Gateways();
@@ -540,14 +526,7 @@ class MultiSafepay_Gateways
                 }
                 $order->set_payment_method($selected_gateway);
 
-                // Temp array needed for tax calculating coupons etc...
-                $tmp_tax = array();
-                foreach ($transactie->checkout_options->tax_tables->alternate as $tax) {
-                    $tmp_tax[$tax->name] = $tax->rules[0]->rate;
-                }
-
-                // TODO: Check if products are filled correctly
-                foreach ($transactie->shopping_cart->items as $product) {
+                 foreach ($transactie->shopping_cart->items as $product) {
 
                     $sku = json_decode($product->merchant_item_id);
 
@@ -766,17 +745,13 @@ class MultiSafepay_Gateways
     public static function doFastCheckout()
     {
         global $woocommerce;
-
-        $msp 	= new MultiSafepay_Client();
+        $msp = new MultiSafepay_Client();
         $helper = new MultiSafepay_Helper_Helper();
-        $fco 	= new MultiSafepay_Gateway_Fastcheckout();
+        $fco = new MultiSafepay_Gateway_Fastcheckout();
         $qwindo = new Qwindo();
 
         $msp->setApiKey($helper->getApiKey());
         $msp->setApiUrl($helper->getTestMode());
-
-        $json_order = file_get_contents('php://input');
-        $my_order = json_decode($json_order, true);
 
         $headers = $qwindo->get_nginx_headers();
 
@@ -786,26 +761,30 @@ class MultiSafepay_Gateways
             $qwindo_key = get_option('multisafepay_qwindo_api_key');
             $hash_id    = get_option('multisafepay_qwindo_hash_id');
 
-            global $wp;
-            $url = home_url( add_query_arg( array(), $wp->request ));
-            if ($_SERVER['QUERY_STRING']){
-                $url .= '?'. $_SERVER['QUERY_STRING'];
+            $base_url = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on' ? 'https' : 'http' ) . '://' .  $_SERVER['HTTP_HOST'];
+            $url = $base_url . $_SERVER["REQUEST_URI"];
+
+            $timestamp  = microtime(true);
+            $auth = explode(':', base64_decode($headers['Auth']));
+
+            $message    = $url . $auth[0] . $hash_id;
+            $token = hash_hmac('sha512', $message, $qwindo_key);
+
+
+            if($token !== $auth[1] and round($timestamp - $auth[0]) > 10){
+                exit("{ 'success': false,
+                        'data': {
+	                        'error_code': 'QW-3000',
+	                        'error': __('Signature error', 'multisafepay')
+	                    }}"
+                );
             }
 
-
-            $timestamp = microtime(true);
-
-            //here we generate the auth token that will allow us to check the authorization for the call
-            $token = hash_hmac('sha512', $url.$timestamp.$json_order, $qwindo_key);
-
-            //generate the authorization base64 encoded string that includes the HASH ID, current call timestamp and generated token based on the url, timestamp and JSON data
-            $auth = base64_encode(sprintf('%s:%s:%s', $hash_id, $timestamp, $token));
-
-            //add the header to the call you want to do
-            header('Content-type: application/json');
-            header('Auth: '.$auth);
+            $my_order = json_decode(file_get_contents('php://input'), true);
 
             $done = $fco->create_qwindo_order($my_order);
+
+            header('Content-type: application/json');
 
             if ($done) {
                 die ('{"success": true, "data": {}}');

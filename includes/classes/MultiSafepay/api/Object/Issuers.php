@@ -22,6 +22,7 @@
  */
 class MultiSafepay_ObjectIssuers extends MultiSafepay_ObjectCore
 {
+
     public $success;
     public $data;
 
@@ -33,4 +34,5 @@ class MultiSafepay_ObjectIssuers extends MultiSafepay_ObjectCore
 
         return $this->data;
     }
+
 }

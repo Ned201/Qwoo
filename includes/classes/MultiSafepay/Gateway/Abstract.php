@@ -242,6 +242,7 @@ class Multisafepay_Gateway_Abstract extends WC_Payment_Gateway
             "amount"                => round($order->get_total() * 100),
             "description"           => 'Order #'.$order->get_order_number(),
             "var2"                  => $order_id,
+            "var3"                  => 'QWINDO',
             "items"                 => $this->setItemList($order->get_items()),
             "manual"                => false,
             "gateway"               => $this->getGatewayCode(),

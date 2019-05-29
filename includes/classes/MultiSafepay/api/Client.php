@@ -22,6 +22,7 @@
  */
 class MultiSafepay_Client
 {
+
     public $orders;
     public $qwindo;
     public $issuers;
@@ -76,6 +77,7 @@ class MultiSafepay_Client
     /*
      * Parses and sets customer address
      */
+
     public function parseCustomerAddress($street_address)
     {
         list($address, $apartment) = $this->parseAddress($street_address);
@@ -95,6 +97,7 @@ class MultiSafepay_Client
     /*
      * Parses and splits up an address in street and housenumber
      */
+
     private function parseAddress($adress, $seperaatAddition = false)
     {
         $street = '';

@@ -83,6 +83,8 @@ class MultiSafepay_ObjectCore
             $exception = new Exception("{$object->error_code}: {$object->error_info}.");
             throw $exception;
         }
+
         return $object;
     }
+
 }
